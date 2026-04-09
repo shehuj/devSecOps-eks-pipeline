@@ -1,0 +1,7 @@
+# CVE suppressions — document each one with reason and expiry date
+#
+# Format:
+#   CVE-XXXX-XXXXX  # reason: <why>, expires: <date>
+#
+# Example:
+#   CVE-2023-12345  # reason: no fix available upstream, not exploitable in our context, expires: 2025-06-01

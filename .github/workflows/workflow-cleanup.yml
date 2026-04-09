@@ -1,0 +1,213 @@
+name: Cleanup — Undeploy & Destroy Infrastructure
+
+# DESTRUCTIVE — tears down all AWS resources created by this pipeline.
+# Manual trigger only. Requires typing the cluster name to confirm.
+# Order: undeploy apps → drain ECR → terraform destroy → (optional) destroy backend
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type the cluster name to confirm: devsecops-eks-dev'
+        required: true
+        type: string
+      destroy_backend:
+        description: 'Also destroy S3 state bucket + DynamoDB lock table?'
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: us-east-1
+  EKS_CLUSTER_NAME: devsecops-eks-dev
+  TF_DIR: terraform/
+  TF_IN_AUTOMATION: true
+
+jobs:
+
+  # ── Confirmation gate ─────────────────────────────────────────────────────────
+  confirm:
+    name: Confirm Destruction
+    runs-on: ubuntu-latest
+    environment: production    # Requires manual reviewer approval
+
+    steps:
+      - name: Verify confirmation input
+        run: |
+          if [ "${{ inputs.confirm }}" != "${{ env.EKS_CLUSTER_NAME }}" ]; then
+            echo "ERROR: Confirmation input '${{ inputs.confirm }}' does not match '${{ env.EKS_CLUSTER_NAME }}'"
+            exit 1
+          fi
+          echo "Confirmation accepted. Proceeding with teardown."
+
+  # ── Step 1: Undeploy Helm releases ────────────────────────────────────────────
+  undeploy-apps:
+    name: Undeploy Helm Releases
+    runs-on: ubuntu-latest
+    needs: confirm
+
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: "3.15.0"
+
+      - name: Uninstall prod release
+        run: |
+          if helm status flask-store -n prod &>/dev/null; then
+            helm uninstall flask-store -n prod --wait --timeout 3m
+            echo "Uninstalled flask-store from prod"
+          else
+            echo "No prod release found — skipping"
+          fi
+
+      - name: Uninstall staging release
+        run: |
+          if helm status flask-store -n staging &>/dev/null; then
+            helm uninstall flask-store -n staging --wait --timeout 3m
+            echo "Uninstalled flask-store from staging"
+          else
+            echo "No staging release found — skipping"
+          fi
+
+      - name: Delete namespaces
+        run: |
+          for ns in prod staging; do
+            if kubectl get namespace "$ns" &>/dev/null; then
+              kubectl delete namespace "$ns" --wait --timeout=2m
+              echo "Deleted namespace: $ns"
+            else
+              echo "Namespace $ns not found — skipping"
+            fi
+          done
+
+  # ── Step 2: Drain ECR images ──────────────────────────────────────────────────
+  drain-ecr:
+    name: Drain ECR Repository
+    runs-on: ubuntu-latest
+    needs: confirm
+
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Delete all ECR images
+        run: |
+          REPO="devsecops-eks-flask-store"
+
+          IMAGE_IDS=$(aws ecr list-images \
+            --repository-name "$REPO" \
+            --region ${{ env.AWS_REGION }} \
+            --query 'imageIds[*]' \
+            --output json 2>/dev/null || echo "[]")
+
+          if [ "$IMAGE_IDS" = "[]" ] || [ -z "$IMAGE_IDS" ]; then
+            echo "No images found in $REPO — skipping"
+            exit 0
+          fi
+
+          echo "Deleting all images from $REPO..."
+          aws ecr batch-delete-image \
+            --repository-name "$REPO" \
+            --region ${{ env.AWS_REGION }} \
+            --image-ids "$IMAGE_IDS"
+
+          echo "ECR repository drained"
+
+  # ── Step 3: Terraform Destroy ─────────────────────────────────────────────────
+  tf-destroy:
+    name: Terraform Destroy
+    runs-on: ubuntu-latest
+    needs: [undeploy-apps, drain-ecr]
+    defaults:
+      run:
+        working-directory: ${{ env.TF_DIR }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.9"
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform Init
+        run: terraform init -input=false
+
+      - name: Terraform Destroy
+        run: |
+          terraform destroy \
+            -var="github_org=shehuj" \
+            -var="github_repo=devsecops-eks-pipeline" \
+            -auto-approve \
+            -input=false
+
+  # ── Step 4 (optional): Destroy Terraform backend ─────────────────────────────
+  destroy-backend:
+    name: Destroy TF Backend (S3 + DynamoDB)
+    runs-on: ubuntu-latest
+    needs: tf-destroy
+    if: inputs.destroy_backend == true
+
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Empty and delete S3 state bucket
+        run: |
+          BUCKET="devsecops-eks-pipeline-tfstate"
+
+          echo "Emptying $BUCKET (all versions)..."
+          # Delete all object versions
+          aws s3api list-object-versions \
+            --bucket "$BUCKET" \
+            --query '{Objects: Versions[].{Key:Key,VersionId:VersionId}}' \
+            --output json 2>/dev/null | \
+          jq -c 'select(.Objects != null)' | \
+          while read -r batch; do
+            aws s3api delete-objects --bucket "$BUCKET" --delete "$batch"
+          done
+
+          # Delete all delete markers
+          aws s3api list-object-versions \
+            --bucket "$BUCKET" \
+            --query '{Objects: DeleteMarkers[].{Key:Key,VersionId:VersionId}}' \
+            --output json 2>/dev/null | \
+          jq -c 'select(.Objects != null)' | \
+          while read -r batch; do
+            aws s3api delete-objects --bucket "$BUCKET" --delete "$batch"
+          done
+
+          aws s3api delete-bucket --bucket "$BUCKET" --region ${{ env.AWS_REGION }}
+          echo "Deleted S3 bucket: $BUCKET"
+
+      - name: Delete DynamoDB lock table
+        run: |
+          TABLE="devsecops-eks-pipeline-tflock"
+          aws dynamodb delete-table --table-name "$TABLE" --region ${{ env.AWS_REGION }}
+          aws dynamodb wait table-not-exists --table-name "$TABLE" --region ${{ env.AWS_REGION }}
+          echo "Deleted DynamoDB table: $TABLE"

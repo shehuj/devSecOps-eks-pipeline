@@ -1,0 +1,5 @@
+failure-threshold: error
+
+ignore:
+  # DL3018: Use --no-cache for apk (we use Alpine base which is handled by pip --no-cache-dir)
+  - DL3018

@@ -1,0 +1,15 @@
+[extend]
+# Use the default Gitleaks ruleset as the base
+useDefault = true
+
+[allowlist]
+description = "Global allowlist"
+
+# Allow test fixtures and example files
+paths = [
+  "terraform/terraform.tfvars.example",
+  "app/tests/",
+]
+
+# Ignore commits from bootstrap runs (document any you add here)
+# commits = []

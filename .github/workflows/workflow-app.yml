@@ -1,0 +1,412 @@
+name: App Pipeline — Scan → Build → Push → Deploy
+
+# Full DevSecOps pipeline: code scans run in parallel, all must pass before build.
+# On main: deploys to staging, smoke-tests, then waits for manual approval → prod.
+# On dev: deploys to staging only.
+
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - 'app/**'
+      - 'helm/**'
+      - '.github/workflows/workflow-app.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'helm/**'
+
+permissions:
+  contents: read
+  id-token: write          # OIDC → AWS
+  security-events: write   # SARIF upload to Security tab
+  pull-requests: write
+
+concurrency:
+  group: app-pipeline-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  AWS_REGION: us-east-1
+  EKS_CLUSTER_NAME: devsecops-eks-dev
+  HELM_CHART: helm/flask-store
+
+# ── Job 1: Secret Scan ─────────────────────────────────────────────────────────
+jobs:
+  secret-scan:
+    name: Secret Scan (TruffleHog)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # Full history required for TruffleHog git diff scan
+
+      - name: TruffleHog — scan for leaked secrets
+        uses: trufflesecurity/trufflehog@v3.82.6
+        with:
+          path: ./
+          base: ${{ github.event.before || 'HEAD~1' }}
+          head: ${{ github.event.after || 'HEAD' }}
+          extra_args: --only-verified --fail
+
+# ── Job 2: SAST (Bandit) ───────────────────────────────────────────────────────
+  sast:
+    name: SAST — Bandit (Python)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Bandit
+        run: pip install bandit==1.7.9
+
+      - name: Run Bandit — fail on HIGH severity + HIGH confidence
+        run: |
+          bandit -r app/src/ \
+            --level HIGH \
+            --confidence HIGH \
+            --format json \
+            --output bandit-report.json \
+            --exit-zero
+          # Print human-readable summary
+          bandit -r app/src/ --level HIGH --confidence HIGH
+
+      - name: Upload Bandit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-report-${{ github.sha }}
+          path: bandit-report.json
+          retention-days: 30
+
+# ── Job 3: SCA (Safety + Dependency Review) ────────────────────────────────────
+  sca:
+    name: SCA — Safety & Dependency Review
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Safety
+        run: pip install safety==3.2.3
+
+      - name: Safety — check requirements for known CVEs
+        run: |
+          safety check \
+            -r app/requirements.txt \
+            --json \
+            --output safety-report.json
+        continue-on-error: false
+
+      - name: Upload Safety report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: safety-report-${{ github.sha }}
+          path: safety-report.json
+          retention-days: 30
+
+      # Catches NEW vulnerable deps introduced in this PR specifically
+      - name: Dependency Review (PR only)
+        if: github.event_name == 'pull_request'
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: critical
+
+# ── Job 4: IaC + Dockerfile Scan ──────────────────────────────────────────────
+  iac-scan:
+    name: IaC & Dockerfile Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Hadolint — Dockerfile lint
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: app/Dockerfile
+          config: app/.hadolint.yaml
+          failure-threshold: error
+
+      - name: Checkov — Terraform + Helm scan
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: .
+          framework: terraform,helm
+          soft_fail: false
+          output_format: sarif
+          output_file_path: checkov-app.sarif
+
+      - name: Upload Checkov SARIF
+        if: always() && hashFiles('checkov-app.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: checkov-app.sarif
+          category: checkov-app
+
+      - name: Trivy — IaC config scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: config
+          scan-ref: .
+          format: sarif
+          output: trivy-config.sarif
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+          trivyignores: app/.trivyignore
+
+      - name: Upload Trivy config SARIF
+        if: always() && hashFiles('trivy-config.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-config.sarif
+          category: trivy-config
+
+# ── Job 5: Unit Tests ──────────────────────────────────────────────────────────
+  unit-tests:
+    name: Unit Tests (pytest)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        working-directory: app/
+        run: pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Run pytest
+        working-directory: app/
+        run: pytest tests/ -v --tb=short
+
+# ── Job 6: Build, Scan & Push to ECR ──────────────────────────────────────────
+  build-and-push:
+    name: Build → Scan → Push (ECR)
+    runs-on: ubuntu-latest
+    needs: [secret-scan, sast, sca, iac-scan, unit-tests]
+    if: github.event_name != 'pull_request'   # No push on PRs — scan only
+    outputs:
+      image-uri: ${{ steps.set-image.outputs.image-uri }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set image URI
+        id: set-image
+        run: |
+          IMAGE="${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY }}:${{ github.sha }}"
+          echo "image-uri=$IMAGE" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: app/
+          push: false           # Build locally first for scanning — push after scan passes
+          load: true
+          tags: ${{ steps.set-image.outputs.image-uri }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Container scan BEFORE pushing to registry
+      - name: Trivy — container image scan (blocking)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: image
+          image-ref: ${{ steps.set-image.outputs.image-uri }}
+          format: sarif
+          output: trivy-image.sarif
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+          ignore-unfixed: true
+          trivyignores: app/.trivyignore
+
+      - name: Upload Trivy image SARIF
+        if: always() && hashFiles('trivy-image.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-image.sarif
+          category: trivy-image
+
+      - name: Trivy — generate SBOM (CycloneDX)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: image
+          image-ref: ${{ steps.set-image.outputs.image-uri }}
+          format: cyclonedx
+          output: sbom.json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ github.sha }}
+          path: sbom.json
+          retention-days: 90
+
+      # Push only after scan passes
+      - name: Push image to ECR
+        run: |
+          docker push ${{ steps.set-image.outputs.image-uri }}
+          # Also tag with branch name for human-readable reference
+          BRANCH_TAG="${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY }}:${{ github.ref_name }}"
+          docker tag ${{ steps.set-image.outputs.image-uri }} $BRANCH_TAG
+          docker push $BRANCH_TAG
+
+# ── Job 7: Deploy to Staging ───────────────────────────────────────────────────
+  deploy-staging:
+    name: Deploy → Staging
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    environment: staging
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: "3.15.0"
+
+      - name: Helm lint
+        run: helm lint ${{ env.HELM_CHART }}
+
+      - name: Deploy to staging
+        run: |
+          helm upgrade --install flask-store ${{ env.HELM_CHART }} \
+            --namespace staging \
+            --create-namespace \
+            --values ${{ env.HELM_CHART }}/values-staging.yaml \
+            --set image.repository=${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY }} \
+            --set image.tag=${{ github.sha }} \
+            --atomic \
+            --timeout 5m \
+            --wait
+
+      - name: Verify rollout
+        run: kubectl rollout status deployment/flask-store -n staging --timeout=120s
+
+# ── Job 8: Smoke Test ─────────────────────────────────────────────────────────
+  smoke-test:
+    name: Smoke Test (Staging)
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
+
+      - name: Wait for ALB to be ready
+        run: |
+          echo "Waiting for ALB hostname..."
+          for i in $(seq 1 24); do
+            HOSTNAME=$(kubectl get ingress flask-store -n staging \
+              -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
+            if [ -n "$HOSTNAME" ]; then
+              echo "ALB_URL=http://$HOSTNAME" >> "$GITHUB_ENV"
+              echo "ALB ready: $HOSTNAME"
+              break
+            fi
+            echo "Attempt $i/24 — waiting 10s..."
+            sleep 10
+          done
+          if [ -z "$HOSTNAME" ]; then
+            echo "ALB hostname not available after 4 minutes"
+            exit 1
+          fi
+
+      - name: Health check
+        run: |
+          echo "Testing $ALB_URL/health"
+          curl -f --retry 5 --retry-delay 10 "$ALB_URL/health"
+
+      - name: Products endpoint check
+        run: |
+          curl -f --retry 3 "$ALB_URL/products"
+
+# ── Job 9: Deploy to Production ───────────────────────────────────────────────
+  deploy-prod:
+    name: Deploy → Production
+    runs-on: ubuntu-latest
+    needs: smoke-test
+    if: github.ref == 'refs/heads/main'
+    environment: production    # Manual approval gate — configure in GitHub Settings → Environments
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: "3.15.0"
+
+      - name: Deploy to production
+        run: |
+          helm upgrade --install flask-store ${{ env.HELM_CHART }} \
+            --namespace prod \
+            --create-namespace \
+            --values ${{ env.HELM_CHART }}/values-prod.yaml \
+            --set image.repository=${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY }} \
+            --set image.tag=${{ github.sha }} \
+            --atomic \
+            --timeout 5m \
+            --wait
+
+      - name: Verify production rollout
+        run: kubectl rollout status deployment/flask-store -n prod --timeout=180s

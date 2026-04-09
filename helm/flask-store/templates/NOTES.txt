@@ -1,0 +1,11 @@
+Flask Store has been deployed to namespace {{ .Release.Namespace }}.
+
+Get the application URL:
+  kubectl get ingress {{ include "flask-store.fullname" . }} -n {{ .Release.Namespace }}
+
+Check pod status:
+  kubectl get pods -l app.kubernetes.io/name={{ include "flask-store.name" . }} -n {{ .Release.Namespace }}
+
+Check health endpoint:
+  ALB_URL=$(kubectl get ingress {{ include "flask-store.fullname" . }} -n {{ .Release.Namespace }} -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+  curl http://$ALB_URL/health

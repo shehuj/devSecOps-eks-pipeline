@@ -1,0 +1,38 @@
+# Terraform
+*.tfvars
+!*.tfvars.example
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+crash.log
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+dist/
+build/
+.venv/
+venv/
+*.egg
+
+# Security reports (generated artifacts — not source)
+bandit-report.json
+safety-report.json
+trivy-*.sarif
+checkov-*.sarif
+sbom.json
+reports/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
