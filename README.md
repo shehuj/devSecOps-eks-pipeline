@@ -44,13 +44,25 @@ Push to main/dev
 
 **Nightly workflow** (`workflow-security.yml`): Gitleaks full history + OWASP DepCheck + Trivy ECR + Checkov CIS
 
+**Cleanup workflow** (`workflow-cleanup.yml`): Manual teardown — undeploy apps → drain ECR → terraform destroy → (optional) destroy backend
+
+## Workflows Summary
+
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| `workflow-app.yml` | Push to `main`/`dev`, PR | Secret scan + SAST + SCA + IaC scan + unit tests → build → staging → smoke test → prod |
+| `workflow-infra.yml` | Push to `main` (`terraform/**`), manual | IaC scan → tf validate → tf plan → manual approval → tf apply |
+| `workflow-security.yml` | Nightly 02:00 UTC, manual | Gitleaks + OWASP DepCheck + Trivy ECR + Checkov CIS benchmark |
+| `workflow-cleanup.yml` | Manual only | Undeploy Helm releases → drain ECR → terraform destroy → (optional) destroy S3/DynamoDB backend |
+
 ## Repository Structure
 
 ```
 ├── .github/workflows/
 │   ├── workflow-app.yml        # Main CI/CD pipeline
 │   ├── workflow-infra.yml      # Terraform EKS provisioning
-│   └── workflow-security.yml  # Nightly deep scans
+│   ├── workflow-security.yml  # Nightly deep scans
+│   └── workflow-cleanup.yml   # Full teardown (manual)
 ├── app/
 │   ├── src/                    # Flask application source
 │   ├── tests/                  # pytest unit tests
@@ -111,7 +123,7 @@ In your repo → Settings → Secrets and variables → Actions:
 
 Settings → Environments → Create:
 - `staging` — no required reviewers (auto-deploy)
-- `production` — add yourself as required reviewer
+- `production` — add yourself as required reviewer (gates prod deploys and cleanup)
 
 ### 5. Push and watch the pipeline
 
@@ -144,6 +156,33 @@ python -m src.app
 kubectl get nodes
 kubectl get pods -n staging
 kubectl get pods -n prod
+```
+
+## Teardown
+
+To destroy all AWS resources when done:
+
+1. Go to **Actions → Cleanup — Undeploy & Destroy Infrastructure → Run workflow**
+2. Type `devsecops-eks-dev` in the confirmation field
+3. Check **"Also destroy S3 state bucket + DynamoDB lock table?"** only if you want a full wipe
+4. Approve the `production` environment gate when prompted
+
+**Teardown order:**
+
+```
+confirm (production gate)
+       │
+       ├─ [undeploy-apps]  helm uninstall prod + staging → delete namespaces
+       ├─ [drain-ecr]      delete all ECR image versions
+       │
+       └──────────────────── both complete ────────────────────┐
+                                                               │
+                                                        [tf-destroy]
+                                                        terraform destroy
+                                                        (EKS, VPC, IAM, ECR)
+                                                               │
+                                                    [destroy-backend] ← optional
+                                                    delete S3 + DynamoDB
 ```
 
 ## Security Controls
