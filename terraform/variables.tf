@@ -19,6 +19,7 @@ variable "environment" {
 variable "github_org" {
   description = "GitHub organization or username for OIDC trust policy"
   type        = string
+  default     = "shehuj"
 }
 
 variable "github_repo" {
