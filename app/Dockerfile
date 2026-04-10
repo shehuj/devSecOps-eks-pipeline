@@ -1,12 +1,12 @@
 # syntax=docker/dockerfile:1.7
 FROM python:3.13-alpine3.21 AS base
 
+# Upgrade all Alpine packages so the final image ships patched OS libs
+# (catches OpenSSL CVEs fixed in 3.3.6-r0+ that the base image may not yet include)
+RUN apk upgrade --no-cache
+
 # Create non-root user
 RUN addgroup -S -g 10001 appgroup && adduser -S -u 10001 -G appgroup appuser
-
-# Upgrade system pip + setuptools so the final image ships patched versions
-# (builder inherits this too — both stages start from base)
-RUN pip install --no-cache-dir --upgrade pip setuptools
 
 WORKDIR /app
 
