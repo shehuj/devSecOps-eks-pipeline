@@ -83,7 +83,7 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Trivy scan — latest image
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.33.1
         with:
           scan-type: image
           image-ref: ${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY }}:main
