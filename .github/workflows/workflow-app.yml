@@ -68,14 +68,17 @@ jobs:
 
       - name: Run Bandit — fail on HIGH severity + HIGH confidence
         run: |
+          # Save JSON report (always exit 0 so the artifact uploads even on findings)
           bandit -r app/src/ \
-            --level HIGH \
-            --confidence HIGH \
+            --severity-level high \
+            --confidence-level high \
             --format json \
             --output bandit-report.json \
             --exit-zero
-          # Print human-readable summary
-          bandit -r app/src/ --level HIGH --confidence HIGH
+          # Human-readable summary — non-zero exit if findings exist
+          bandit -r app/src/ \
+            --severity-level high \
+            --confidence-level high
 
       - name: Upload Bandit report
         if: always()
@@ -146,6 +149,7 @@ jobs:
           soft_fail: false
           output_format: sarif
           output_file_path: checkov-app.sarif
+          config_file: .checkov.yaml
 
       - name: Upload Checkov SARIF
         if: always() && hashFiles('checkov-app.sarif') != ''
@@ -155,7 +159,7 @@ jobs:
           category: checkov-app
 
       - name: Trivy — IaC config scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
           scan-type: config
           scan-ref: .
@@ -235,7 +239,7 @@ jobs:
 
       # Container scan BEFORE pushing to registry
       - name: Trivy — container image scan (blocking)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
           scan-type: image
           image-ref: ${{ steps.set-image.outputs.image-uri }}
@@ -254,7 +258,7 @@ jobs:
           category: trivy-image
 
       - name: Trivy — generate SBOM (CycloneDX)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
           scan-type: image
           image-ref: ${{ steps.set-image.outputs.image-uri }}

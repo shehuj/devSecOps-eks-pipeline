@@ -51,6 +51,7 @@ jobs:
           soft_fail: false
           output_format: cli,sarif
           output_file_path: console,checkov-results.sarif
+          config_file: .checkov.yaml
 
       - name: Upload Checkov SARIF to Security tab
         if: always() && hashFiles('checkov-results.sarif') != ''
@@ -60,7 +61,7 @@ jobs:
           category: checkov
 
       - name: Trivy — IaC config scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
           scan-type: config
           scan-ref: terraform/

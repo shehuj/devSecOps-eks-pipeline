@@ -1,0 +1,10 @@
+skip-check:
+  # CKV_K8S_21: Checkov renders Helm templates with namespace=default because it has
+  # no deploy-time context. All templates use {{ .Release.Namespace }} — namespace is
+  # set at helm install via --namespace flag.
+  - CKV_K8S_21
+
+  # CKV_K8S_43: Pipeline pins images to immutable git SHA tags (github.sha).
+  # Digest-based references would require knowing the digest before building,
+  # which breaks the pipeline flow.
+  - CKV_K8S_43
