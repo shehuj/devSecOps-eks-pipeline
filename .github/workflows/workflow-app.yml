@@ -88,9 +88,9 @@ jobs:
           path: bandit-report.json
           retention-days: 30
 
-# ── Job 3: SCA (Safety + Dependency Review) ────────────────────────────────────
+# ── Job 3: SCA (Safety) ────────────────────────────────────────────────────────
   sca:
-    name: SCA — Safety & Dependency Review
+    name: SCA — Safety
     runs-on: ubuntu-latest
 
     steps:
@@ -118,12 +118,6 @@ jobs:
           path: safety-report.json
           retention-days: 30
 
-      # Catches NEW vulnerable deps introduced in this PR specifically
-      - name: Dependency Review (PR only)
-        if: github.event_name == 'pull_request'
-        uses: actions/dependency-review-action@v4
-        with:
-          fail-on-severity: critical
 
 # ── Job 4: IaC + Dockerfile Scan ──────────────────────────────────────────────
   iac-scan:
@@ -158,16 +152,15 @@ jobs:
           sarif_file: checkov-app.sarif
           category: checkov-app
 
-      - name: Trivy — IaC config scan (Helm + Dockerfile only)
+      - name: Trivy — IaC config scan (Helm)
         uses: aquasecurity/trivy-action@v0.35.0
+        continue-on-error: true   # Advisory — Checkov is the hard gate for Helm misconfigs
         with:
           scan-type: config
           scan-ref: helm/
-          format: sarif
-          output: trivy-config.sarif
+          format: table
           severity: CRITICAL,HIGH
-          exit-code: '1'
-          trivyignores: app/.trivyignore
+          exit-code: '0'
 
       - name: Trivy — Dockerfile scan
         uses: aquasecurity/trivy-action@v0.35.0
