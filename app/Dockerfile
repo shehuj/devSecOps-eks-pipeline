@@ -2,7 +2,7 @@
 FROM python:3.12.4-alpine3.20 AS base
 
 # Create non-root user
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+RUN addgroup -S -g 10001 appgroup && adduser -S -u 10001 -G appgroup appuser
 
 WORKDIR /app
 

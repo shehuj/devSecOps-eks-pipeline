@@ -19,6 +19,7 @@ spec:
         rollme: {{ .Values.image.tag | quote }}
     spec:
       serviceAccountName: {{ include "flask-store.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.automountServiceAccountToken }}
       {{- with .Values.podSecurityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}

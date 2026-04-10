@@ -116,6 +116,7 @@ jobs:
           soft_fail: true       # Report only on nightly — don't block the schedule run
           output_format: sarif
           output_file_path: checkov-nightly.sarif
+          config_file: .checkov.yaml
 
       - name: Upload Checkov nightly SARIF
         if: always() && hashFiles('checkov-nightly.sarif') != ''

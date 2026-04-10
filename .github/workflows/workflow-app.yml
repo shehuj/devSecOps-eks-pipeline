@@ -149,6 +149,7 @@ jobs:
           soft_fail: false
           output_format: sarif
           output_file_path: checkov-app.sarif
+          config_file: .checkov.yaml
 
       - name: Upload Checkov SARIF
         if: always() && hashFiles('checkov-app.sarif') != ''

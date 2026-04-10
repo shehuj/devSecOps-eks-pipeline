@@ -51,6 +51,7 @@ jobs:
           soft_fail: false
           output_format: cli,sarif
           output_file_path: console,checkov-results.sarif
+          config_file: .checkov.yaml
 
       - name: Upload Checkov SARIF to Security tab
         if: always() && hashFiles('checkov-results.sarif') != ''
