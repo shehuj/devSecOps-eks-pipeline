@@ -21,8 +21,9 @@ on:
 
 permissions:
   contents: read
-  id-token: write        # Required for OIDC
-  pull-requests: write   # For plan comments on PRs
+  id-token: write          # Required for OIDC
+  pull-requests: write     # For plan comments on PRs
+  security-events: write   # SARIF upload to Security tab
 
 concurrency:
   group: terraform-${{ github.ref }}
