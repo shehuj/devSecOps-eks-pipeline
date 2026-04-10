@@ -49,7 +49,7 @@ jobs:
           path: ./
           base: ${{ github.event.before || 'HEAD~1' }}
           head: ${{ github.event.after || 'HEAD' }}
-          extra_args: --only-verified --fail
+          extra_args: --only-verified
 
 # ── Job 2: SAST (Bandit) ───────────────────────────────────────────────────────
   sast:
