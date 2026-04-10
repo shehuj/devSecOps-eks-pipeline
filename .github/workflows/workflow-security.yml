@@ -62,6 +62,7 @@ jobs:
       - name: Upload OWASP SARIF to Security tab
         if: always() && hashFiles('reports/dependency-check-report.sarif') != ''
         uses: github/codeql-action/upload-sarif@v3
+        continue-on-error: true
         with:
           sarif_file: reports/dependency-check-report.sarif
           category: owasp-dependency-check
@@ -96,6 +97,7 @@ jobs:
       - name: Upload Trivy ECR SARIF
         if: always() && hashFiles('trivy-ecr-nightly.sarif') != ''
         uses: github/codeql-action/upload-sarif@v3
+        continue-on-error: true
         with:
           sarif_file: trivy-ecr-nightly.sarif
           category: trivy-ecr-nightly
@@ -121,6 +123,7 @@ jobs:
       - name: Upload Checkov nightly SARIF
         if: always() && hashFiles('checkov-nightly.sarif') != ''
         uses: github/codeql-action/upload-sarif@v3
+        continue-on-error: true
         with:
           sarif_file: checkov-nightly.sarif
           category: checkov-nightly
