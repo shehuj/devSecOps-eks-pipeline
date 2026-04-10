@@ -8,3 +8,14 @@ skip-check:
   # Digest-based references would require knowing the digest before building,
   # which breaks the pipeline flow.
   - CKV_K8S_43
+
+  # CKV_AWS_39 / CKV_AWS_38: EKS public endpoint is required for GitHub Actions
+  # to run helm deploys and kubectl commands without a VPN or bastion host.
+  # Restrict public_access_cidrs to your office/runner IPs for production hardening.
+  - CKV_AWS_39
+  - CKV_AWS_38
+
+  # CKV_AWS_130: Public subnets intentionally assign public IPs — required for
+  # the NAT gateway instance and ALB nodes. EKS worker nodes run in private subnets
+  # and are not affected by this setting.
+  - CKV_AWS_130

@@ -1,3 +1,22 @@
+# ── KMS key for ECR encryption ────────────────────────────────────────────────
+
+resource "aws_kms_key" "ecr" {
+  description             = "KMS key for ECR repository encryption"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+
+  tags = {
+    Name = "${var.project_name}-ecr-kms"
+  }
+}
+
+resource "aws_kms_alias" "ecr" {
+  name          = "alias/${var.project_name}-ecr"
+  target_key_id = aws_kms_key.ecr.key_id
+}
+
+# ── ECR Repository ────────────────────────────────────────────────────────────
+
 resource "aws_ecr_repository" "flask_store" {
   name                 = "${var.project_name}-flask-store"
   image_tag_mutability = "MUTABLE"
@@ -7,7 +26,8 @@ resource "aws_ecr_repository" "flask_store" {
   }
 
   encryption_configuration {
-    encryption_type = "AES256"
+    encryption_type = "KMS"
+    kms_key         = aws_kms_key.ecr.arn
   }
 
   tags = {
