@@ -1,9 +1,39 @@
-# ── KMS key for ECR encryption ────────────────────────────────────────────────
+data "aws_caller_identity" "current" {}
+
+# ── KMS key for ECR encryption (CKV2_AWS_64) ─────────────────────────────────
+
+data "aws_iam_policy_document" "ecr_kms_policy" {
+  statement {
+    sid    = "EnableRootAccess"
+    effect = "Allow"
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"]
+    }
+    actions   = ["kms:*"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "AllowECR"
+    effect = "Allow"
+    principals {
+      type        = "Service"
+      identifiers = ["ecr.amazonaws.com"]
+    }
+    actions = [
+      "kms:GenerateDataKey*",
+      "kms:Decrypt",
+    ]
+    resources = ["*"]
+  }
+}
 
 resource "aws_kms_key" "ecr" {
   description             = "KMS key for ECR repository encryption"
   deletion_window_in_days = 7
   enable_key_rotation     = true
+  policy                  = data.aws_iam_policy_document.ecr_kms_policy.json
 
   tags = {
     Name = "${var.project_name}-ecr-kms"
@@ -19,7 +49,7 @@ resource "aws_kms_alias" "ecr" {
 
 resource "aws_ecr_repository" "flask_store" {
   name                 = "${var.project_name}-flask-store"
-  image_tag_mutability = "MUTABLE"
+  image_tag_mutability = "IMMUTABLE"  # CKV_AWS_51 — SHA tags are unique per build
 
   image_scanning_configuration {
     scan_on_push = true
@@ -44,10 +74,10 @@ resource "aws_ecr_lifecycle_policy" "flask_store" {
         rulePriority = 1
         description  = "Keep last 10 tagged images"
         selection = {
-          tagStatus     = "tagged"
-          tagPrefixList = ["v", "main", "dev"]
-          countType     = "imageCountMoreThan"
-          countNumber   = 10
+          tagStatus   = "tagged"
+          tagPrefixList = ["sha-"]
+          countType   = "imageCountMoreThan"
+          countNumber = 10
         }
         action = { type = "expire" }
       },

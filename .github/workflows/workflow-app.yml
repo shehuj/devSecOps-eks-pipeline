@@ -272,14 +272,10 @@ jobs:
           path: sbom.json
           retention-days: 90
 
-      # Push only after scan passes
+      # Push only after scan passes — SHA tag only (IMMUTABLE repo requires unique tags)
       - name: Push image to ECR
         run: |
           docker push ${{ steps.set-image.outputs.image-uri }}
-          # Also tag with branch name for human-readable reference
-          BRANCH_TAG="${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY }}:${{ github.ref_name }}"
-          docker tag ${{ steps.set-image.outputs.image-uri }} $BRANCH_TAG
-          docker push $BRANCH_TAG
 
 # ── Job 7: Deploy to Staging ───────────────────────────────────────────────────
   deploy-staging:
