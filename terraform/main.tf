@@ -31,7 +31,7 @@ module "iam" {
   aws_region                        = var.aws_region
   github_org                        = var.github_org
   github_repo                       = var.github_repo
-  existing_github_actions_role_name = var.existing_github_actions_role_name
+  # Removed unexpected attribute: existing_github_actions_role_name
   eks_oidc_provider_url             = module.eks.oidc_provider_url
   eks_oidc_provider_arn             = module.eks.oidc_provider_arn
 
