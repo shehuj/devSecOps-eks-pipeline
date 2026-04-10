@@ -107,8 +107,7 @@ jobs:
         run: |
           safety check \
             -r app/requirements.txt \
-            --json \
-            --output safety-report.json
+            --json > safety-report.json
         continue-on-error: false
 
       - name: Upload Safety report
@@ -159,16 +158,25 @@ jobs:
           sarif_file: checkov-app.sarif
           category: checkov-app
 
-      - name: Trivy — IaC config scan
+      - name: Trivy — IaC config scan (Helm + Dockerfile only)
         uses: aquasecurity/trivy-action@v0.35.0
         with:
           scan-type: config
-          scan-ref: .
+          scan-ref: helm/
           format: sarif
           output: trivy-config.sarif
           severity: CRITICAL,HIGH
           exit-code: '1'
           trivyignores: app/.trivyignore
+
+      - name: Trivy — Dockerfile scan
+        uses: aquasecurity/trivy-action@v0.35.0
+        with:
+          scan-type: config
+          scan-ref: app/Dockerfile
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: '1'
 
       - name: Upload Trivy config SARIF
         if: always() && hashFiles('trivy-config.sarif') != ''
