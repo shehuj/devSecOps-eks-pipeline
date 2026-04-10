@@ -32,6 +32,23 @@ resource "aws_iam_role_policy_attachment" "node_ecr" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 }
 
+# ── KMS key for EKS secrets encryption ───────────────────────────────────────
+
+resource "aws_kms_key" "eks_secrets" {
+  description             = "KMS key for EKS secrets encryption"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-eks-secrets-kms"
+  }
+}
+
+resource "aws_kms_alias" "eks_secrets" {
+  name          = "alias/${var.project_name}-${var.environment}-eks-secrets"
+  target_key_id = aws_kms_key.eks_secrets.key_id
+}
+
 # ── EKS Cluster ───────────────────────────────────────────────────────────────
 
 resource "aws_iam_role" "cluster" {
@@ -66,6 +83,14 @@ resource "aws_eks_cluster" "main" {
     subnet_ids              = concat(var.private_subnet_ids, [])
     endpoint_private_access = true
     endpoint_public_access  = true
+  }
+
+  # Envelope encryption for Kubernetes secrets (CKV_AWS_58)
+  encryption_config {
+    provider {
+      key_arn = aws_kms_key.eks_secrets.arn
+    }
+    resources = ["secrets"]
   }
 
   # Enable control plane logging

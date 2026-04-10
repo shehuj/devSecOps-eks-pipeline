@@ -111,3 +111,73 @@ resource "aws_route_table_association" "private" {
   subnet_id      = aws_subnet.private[count.index].id
   route_table_id = aws_route_table.private.id
 }
+
+# ── Default Security Group lockdown (CKV2_AWS_12) ─────────────────────────────
+# Removes all rules from the default SG — forces explicit SG creation
+
+resource "aws_default_security_group" "default" {
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name = "${local.cluster_name}-default-sg-locked"
+  }
+}
+
+# ── VPC Flow Logs (CKV2_AWS_11) ───────────────────────────────────────────────
+
+resource "aws_cloudwatch_log_group" "flow_log" {
+  name              = "/aws/vpc/${local.cluster_name}/flow-logs"
+  retention_in_days = 30
+
+  tags = {
+    Name = "${local.cluster_name}-flow-logs"
+  }
+}
+
+resource "aws_iam_role" "flow_log" {
+  name = "${local.cluster_name}-vpc-flow-log-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "vpc-flow-logs.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+
+  tags = {
+    Name = "${local.cluster_name}-vpc-flow-log-role"
+  }
+}
+
+resource "aws_iam_role_policy" "flow_log" {
+  name = "${local.cluster_name}-vpc-flow-log-policy"
+  role = aws_iam_role.flow_log.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
+        "logs:DescribeLogGroups",
+        "logs:DescribeLogStreams",
+      ]
+      Resource = "*"
+    }]
+  })
+}
+
+resource "aws_flow_log" "main" {
+  iam_role_arn    = aws_iam_role.flow_log.arn
+  log_destination = aws_cloudwatch_log_group.flow_log.arn
+  traffic_type    = "ALL"
+  vpc_id          = aws_vpc.main.id
+
+  tags = {
+    Name = "${local.cluster_name}-flow-log"
+  }
+}
