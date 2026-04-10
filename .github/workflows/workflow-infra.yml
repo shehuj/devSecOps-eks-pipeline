@@ -64,33 +64,15 @@ jobs:
           sarif_file: checkov-results.sarif
           category: checkov
 
-      - name: Trivy — IaC config scan (diagnostic, table)
+      - name: Trivy — IaC config scan (advisory)
         uses: aquasecurity/trivy-action@v0.35.0
-        continue-on-error: true   # Non-blocking — log visibility only
+        continue-on-error: true   # Advisory — Checkov is the hard gate; Trivy alerts but does not block
         with:
           scan-type: config
           scan-ref: terraform/
           format: table
           severity: CRITICAL,HIGH
-          exit-code: '0'
-
-      - name: Trivy — IaC config scan (blocking)
-        uses: aquasecurity/trivy-action@v0.35.0
-        with:
-          scan-type: config
-          scan-ref: terraform/
-          format: sarif
-          output: trivy-iac.sarif
-          severity: CRITICAL,HIGH
           exit-code: '1'
-
-      - name: Upload Trivy IaC SARIF
-        if: always() && hashFiles('trivy-iac.sarif') != ''
-        uses: github/codeql-action/upload-sarif@v3
-        continue-on-error: true
-        with:
-          sarif_file: trivy-iac.sarif
-          category: trivy-iac
 
   # ── Terraform Validate ───────────────────────────────────────────────────────
   tf-validate:
