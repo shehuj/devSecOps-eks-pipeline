@@ -64,7 +64,17 @@ jobs:
           sarif_file: checkov-results.sarif
           category: checkov
 
-      - name: Trivy — IaC config scan
+      - name: Trivy — IaC config scan (diagnostic, table)
+        uses: aquasecurity/trivy-action@v0.35.0
+        continue-on-error: true   # Non-blocking — log visibility only
+        with:
+          scan-type: config
+          scan-ref: terraform/
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: '0'
+
+      - name: Trivy — IaC config scan (blocking)
         uses: aquasecurity/trivy-action@v0.35.0
         with:
           scan-type: config
