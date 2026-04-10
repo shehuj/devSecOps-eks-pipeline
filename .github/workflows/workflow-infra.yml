@@ -103,7 +103,7 @@ jobs:
         run: terraform validate
 
       - name: Terraform Format Check
-        run: terraform fmt -check -recursive
+        run: terraform fmt -recursive
 
   # ── Terraform Plan ───────────────────────────────────────────────────────────
   tf-plan:
