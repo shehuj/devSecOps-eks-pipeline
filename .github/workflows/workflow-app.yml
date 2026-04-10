@@ -256,6 +256,7 @@ jobs:
           exit-code: '0'
           ignore-unfixed: true
           trivyignores: app/.trivyignore
+          scanners: vuln   # TruffleHog handles secrets; skip Trivy's built-in secret scan
 
       # Step 2: Blocking SARIF scan — fails the pipeline on fixable CRITICAL/HIGH CVEs
       - name: Trivy — container image scan (blocking)
@@ -269,6 +270,7 @@ jobs:
           exit-code: '1'
           ignore-unfixed: true
           trivyignores: app/.trivyignore
+          scanners: vuln   # TruffleHog handles secrets; skip Trivy's built-in secret scan
 
       - name: Upload Trivy image SARIF
         if: always() && hashFiles('trivy-image.sarif') != ''

@@ -95,6 +95,7 @@ jobs:
           severity: CRITICAL,HIGH,MEDIUM
           ignore-unfixed: false    # Include fixable AND unfixed in nightly report
           exit-code: '0'           # Don't fail — report only (alerts via SARIF)
+          scanners: vuln           # Gitleaks handles secrets; skip Trivy's built-in secret scan
 
       - name: Upload Trivy ECR SARIF
         if: always() && hashFiles('trivy-ecr-nightly.sarif') != ''

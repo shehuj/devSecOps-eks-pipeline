@@ -10,7 +10,9 @@ WORKDIR /app
 FROM base AS builder
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir --user -r requirements.txt
+# Upgrade pip + setuptools first to avoid bundled-version CVEs (e.g. CVE-2024-6345 in setuptools <70)
+RUN pip install --no-cache-dir --upgrade pip setuptools && \
+    pip install --no-cache-dir --user -r requirements.txt
 
 # ── Final stage: minimal runtime image ─────────────────────────────────────────
 FROM base AS final
