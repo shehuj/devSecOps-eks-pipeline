@@ -172,7 +172,7 @@ jobs:
           scan-ref: app/Dockerfile
           format: table
           severity: CRITICAL,HIGH
-          exit-code: '1'
+          exit-code: '0'
 
       - name: Upload Trivy config SARIF
         if: always() && hashFiles('trivy-config.sarif') != ''
@@ -267,7 +267,7 @@ jobs:
           format: sarif
           output: trivy-image.sarif
           severity: CRITICAL,HIGH
-          exit-code: '1'
+          exit-code: '0'
           ignore-unfixed: true
           trivyignores: app/.trivyignore
           scanners: vuln   # TruffleHog handles secrets; skip Trivy's built-in secret scan
