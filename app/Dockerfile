@@ -4,15 +4,17 @@ FROM python:3.13-alpine3.21 AS base
 # Create non-root user
 RUN addgroup -S -g 10001 appgroup && adduser -S -u 10001 -G appgroup appuser
 
+# Upgrade system pip + setuptools so the final image ships patched versions
+# (builder inherits this too — both stages start from base)
+RUN pip install --no-cache-dir --upgrade pip setuptools
+
 WORKDIR /app
 
 # ── Build stage: install dependencies ──────────────────────────────────────────
 FROM base AS builder
 
 COPY requirements.txt .
-# Upgrade pip + setuptools first to avoid bundled-version CVEs (e.g. CVE-2024-6345 in setuptools <70)
-RUN pip install --no-cache-dir --upgrade pip setuptools && \
-    pip install --no-cache-dir --user -r requirements.txt
+RUN pip install --no-cache-dir --user -r requirements.txt
 
 # ── Final stage: minimal runtime image ─────────────────────────────────────────
 FROM base AS final
