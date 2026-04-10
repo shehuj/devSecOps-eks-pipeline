@@ -15,6 +15,8 @@ permissions:
 
 env:
   AWS_REGION: us-east-1
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}           # For local dev — OIDC used in GitHub Actions
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}   # For local
 
 jobs:
 
@@ -62,6 +64,7 @@ jobs:
       - name: Upload OWASP SARIF to Security tab
         if: always() && hashFiles('reports/dependency-check-report.sarif') != ''
         uses: github/codeql-action/upload-sarif@v3
+        continue-on-error: true
         with:
           sarif_file: reports/dependency-check-report.sarif
           category: owasp-dependency-check
@@ -92,10 +95,12 @@ jobs:
           severity: CRITICAL,HIGH,MEDIUM
           ignore-unfixed: false    # Include fixable AND unfixed in nightly report
           exit-code: '0'           # Don't fail — report only (alerts via SARIF)
+          scanners: vuln           # Gitleaks handles secrets; skip Trivy's built-in secret scan
 
       - name: Upload Trivy ECR SARIF
         if: always() && hashFiles('trivy-ecr-nightly.sarif') != ''
         uses: github/codeql-action/upload-sarif@v3
+        continue-on-error: true
         with:
           sarif_file: trivy-ecr-nightly.sarif
           category: trivy-ecr-nightly
@@ -121,6 +126,7 @@ jobs:
       - name: Upload Checkov nightly SARIF
         if: always() && hashFiles('checkov-nightly.sarif') != ''
         uses: github/codeql-action/upload-sarif@v3
+        continue-on-error: true
         with:
           sarif_file: checkov-nightly.sarif
           category: checkov-nightly

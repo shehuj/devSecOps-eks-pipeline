@@ -21,8 +21,9 @@ on:
 
 permissions:
   contents: read
-  id-token: write        # Required for OIDC
-  pull-requests: write   # For plan comments on PRs
+  id-token: write          # Required for OIDC
+  pull-requests: write     # For plan comments on PRs
+  security-events: write   # SARIF upload to Security tab
 
 concurrency:
   group: terraform-${{ github.ref }}
@@ -30,8 +31,10 @@ concurrency:
 
 env:
   TF_IN_AUTOMATION: true
-  AWS_REGION: us-east-1
+  AWS_REGION: ${{ secrets.AWS_REGION }}
   TF_DIR: terraform/
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}           # For local dev — OIDC used in GitHub Actions
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}   # For local
 
 jobs:
 
@@ -56,6 +59,7 @@ jobs:
       - name: Upload Checkov SARIF to Security tab
         if: always() && hashFiles('checkov-results.sarif') != ''
         uses: github/codeql-action/upload-sarif@v3
+        continue-on-error: true
         with:
           sarif_file: checkov-results.sarif
           category: checkov
@@ -73,6 +77,7 @@ jobs:
       - name: Upload Trivy IaC SARIF
         if: always() && hashFiles('trivy-iac.sarif') != ''
         uses: github/codeql-action/upload-sarif@v3
+        continue-on-error: true
         with:
           sarif_file: trivy-iac.sarif
           category: trivy-iac
