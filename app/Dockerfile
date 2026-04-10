@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-FROM python:3.12.4-alpine3.20 AS base
+FROM python:3.13-alpine3.21 AS base
 
 # Create non-root user
 RUN addgroup -S -g 10001 appgroup && adduser -S -u 10001 -G appgroup appuser
