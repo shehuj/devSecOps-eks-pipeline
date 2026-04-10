@@ -37,6 +37,9 @@ resource "aws_iam_role_policy_attachment" "node_ecr" {
 data "aws_caller_identity" "current" {}
 
 data "aws_iam_policy_document" "eks_kms_policy" {
+  # checkov:skip=CKV_AWS_109: KMS resource policies require resource=* — it refers to this key only, not all KMS keys
+  # checkov:skip=CKV_AWS_111: KMS resource policies require resource=* — it refers to this key only, not all KMS keys
+  # checkov:skip=CKV_AWS_356: KMS resource policies require resource=* — it refers to this key only, not all KMS keys
   statement {
     sid    = "EnableRootAccess"
     effect = "Allow"
