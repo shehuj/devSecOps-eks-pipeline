@@ -116,8 +116,8 @@ resource "aws_eks_node_group" "main" {
     max_unavailable = 1
   }
 
-  # Use latest AL2 AMI for the given Kubernetes version
-  ami_type = "AL2_x86_64"
+  # AL2023 — AL2 support ends 2025-11-26 and is not available for EKS 1.33+
+  ami_type = "AL2023_x86_64_STANDARD"
 
   tags = {
     Name = "${var.project_name}-${var.environment}-nodes"
