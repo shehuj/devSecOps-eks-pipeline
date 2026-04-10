@@ -68,14 +68,17 @@ jobs:
 
       - name: Run Bandit — fail on HIGH severity + HIGH confidence
         run: |
+          # Save JSON report (always exit 0 so the artifact uploads even on findings)
           bandit -r app/src/ \
-            --level HIGH \
-            --confidence HIGH \
+            --severity-level high \
+            --confidence-level high \
             --format json \
             --output bandit-report.json \
             --exit-zero
-          # Print human-readable summary
-          bandit -r app/src/ --level HIGH --confidence HIGH
+          # Human-readable summary — non-zero exit if findings exist
+          bandit -r app/src/ \
+            --severity-level high \
+            --confidence-level high
 
       - name: Upload Bandit report
         if: always()
