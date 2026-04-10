@@ -32,12 +32,43 @@ resource "aws_iam_role_policy_attachment" "node_ecr" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 }
 
-# ── KMS key for EKS secrets encryption ───────────────────────────────────────
+# ── KMS key for EKS secrets encryption (CKV2_AWS_64) ─────────────────────────
+
+data "aws_caller_identity" "current" {}
+
+data "aws_iam_policy_document" "eks_kms_policy" {
+  statement {
+    sid    = "EnableRootAccess"
+    effect = "Allow"
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"]
+    }
+    actions   = ["kms:*"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "AllowEKS"
+    effect = "Allow"
+    principals {
+      type        = "Service"
+      identifiers = ["eks.amazonaws.com"]
+    }
+    actions = [
+      "kms:Decrypt",
+      "kms:GenerateDataKey",
+      "kms:DescribeKey",
+    ]
+    resources = ["*"]
+  }
+}
 
 resource "aws_kms_key" "eks_secrets" {
   description             = "KMS key for EKS secrets encryption"
   deletion_window_in_days = 7
   enable_key_rotation     = true
+  policy                  = data.aws_iam_policy_document.eks_kms_policy.json
 
   tags = {
     Name = "${var.project_name}-${var.environment}-eks-secrets-kms"

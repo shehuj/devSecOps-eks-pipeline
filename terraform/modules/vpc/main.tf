@@ -125,9 +125,59 @@ resource "aws_default_security_group" "default" {
 
 # ── VPC Flow Logs (CKV2_AWS_11) ───────────────────────────────────────────────
 
+data "aws_caller_identity" "current" {}
+
+# KMS key for CloudWatch log group encryption (CKV_AWS_158)
+data "aws_iam_policy_document" "flow_log_kms_policy" {
+  statement {
+    sid    = "EnableRootAccess"
+    effect = "Allow"
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"]
+    }
+    actions   = ["kms:*"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "AllowCloudWatchLogs"
+    effect = "Allow"
+    principals {
+      type        = "Service"
+      identifiers = ["logs.${var.aws_region}.amazonaws.com"]
+    }
+    actions = [
+      "kms:Encrypt*",
+      "kms:Decrypt*",
+      "kms:ReEncrypt*",
+      "kms:GenerateDataKey*",
+      "kms:Describe*",
+    ]
+    resources = ["*"]
+    condition {
+      test     = "ArnLike"
+      variable = "kms:EncryptionContext:aws:logs:arn"
+      values   = ["arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/vpc/${local.cluster_name}/flow-logs"]
+    }
+  }
+}
+
+resource "aws_kms_key" "flow_log" {
+  description             = "KMS key for VPC flow log CloudWatch encryption"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+  policy                  = data.aws_iam_policy_document.flow_log_kms_policy.json
+
+  tags = {
+    Name = "${local.cluster_name}-flow-log-kms"
+  }
+}
+
 resource "aws_cloudwatch_log_group" "flow_log" {
   name              = "/aws/vpc/${local.cluster_name}/flow-logs"
-  retention_in_days = 30
+  retention_in_days = 365   # CKV_AWS_338: minimum 1 year
+  kms_key_id        = aws_kms_key.flow_log.arn  # CKV_AWS_158
 
   tags = {
     Name = "${local.cluster_name}-flow-logs"
@@ -151,6 +201,7 @@ resource "aws_iam_role" "flow_log" {
   }
 }
 
+# Scoped to specific log group ARN (CKV_AWS_290, CKV_AWS_355)
 resource "aws_iam_role_policy" "flow_log" {
   name = "${local.cluster_name}-vpc-flow-log-policy"
   role = aws_iam_role.flow_log.id
@@ -160,13 +211,15 @@ resource "aws_iam_role_policy" "flow_log" {
     Statement = [{
       Effect = "Allow"
       Action = [
-        "logs:CreateLogGroup",
         "logs:CreateLogStream",
         "logs:PutLogEvents",
         "logs:DescribeLogGroups",
         "logs:DescribeLogStreams",
       ]
-      Resource = "*"
+      Resource = [
+        aws_cloudwatch_log_group.flow_log.arn,
+        "${aws_cloudwatch_log_group.flow_log.arn}:*",
+      ]
     }]
   })
 }
