@@ -6,8 +6,11 @@ project_name        = "devsecops-eks"
 environment         = "dev"
 github_org          = "shehuj"
 github_repo         = "devsecops-eks-pipeline"
-eks_cluster_version = "1.30"
+eks_cluster_version = "1.33"
 node_instance_type  = "t3.medium"
 node_desired_size   = 2
 node_min_size       = 1
 node_max_size       = 3
+
+# Pre-existing IAM role for GitHub Actions OIDC (not created by this Terraform)
+existing_github_actions_role_name = "prod-GitHubActionsRole"

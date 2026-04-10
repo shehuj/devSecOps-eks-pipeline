@@ -23,6 +23,12 @@ variable "github_repo" {
   type        = string
 }
 
+variable "existing_github_actions_role_name" {
+  description = "Name of the pre-existing IAM role for GitHub Actions (not managed by this Terraform)"
+  type        = string
+  default     = "prod-GitHubActionsRole"
+}
+
 variable "eks_oidc_provider_url" {
   description = "EKS cluster OIDC provider URL (for IRSA)"
   type        = string

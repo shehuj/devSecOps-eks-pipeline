@@ -30,7 +30,7 @@ variable "github_repo" {
 variable "eks_cluster_version" {
   description = "Kubernetes version for the EKS cluster"
   type        = string
-  default     = "1.30"
+  default     = "1.33"
 }
 
 variable "node_instance_type" {
@@ -55,4 +55,10 @@ variable "node_max_size" {
   description = "Maximum number of EKS worker nodes"
   type        = number
   default     = 3
+}
+
+variable "existing_github_actions_role_name" {
+  description = "Name of the pre-existing IAM role for GitHub Actions (not managed by this Terraform)"
+  type        = string
+  default     = "prod-GitHubActionsRole"
 }
