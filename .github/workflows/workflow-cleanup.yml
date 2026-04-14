@@ -26,9 +26,6 @@ env:
   EKS_CLUSTER_NAME: devsecops-eks-dev
   TF_DIR: terraform/
   TF_IN_AUTOMATION: true
-  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}           # For local dev — OIDC used in GitHub Actions
-  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}   # For local
-  AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}                                   # For GitHub Actions OIDC
 
 jobs:
 
