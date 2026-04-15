@@ -15,8 +15,6 @@ permissions:
 
 env:
   AWS_REGION: us-east-1
-  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}           # For local dev — OIDC used in GitHub Actions
-  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}   # For local
 
 jobs:
 
