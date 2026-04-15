@@ -301,11 +301,11 @@ jobs:
           docker push ${{ steps.set-image.outputs.image-uri }}
 
 # ── Job 7: Deploy to Staging ───────────────────────────────────────────────────
-  deploy-staging:
+  deploy-dev:
     name: Deploy → Staging
     runs-on: ubuntu-latest
     needs: build-and-push
-    environment: staging
+    environment: "dev"
 
     steps:
       - uses: actions/checkout@v4
@@ -350,7 +350,7 @@ jobs:
   smoke-test:
     name: Smoke Test (Staging)
     runs-on: ubuntu-latest
-    needs: deploy-staging
+    needs: deploy-dev
 
     steps:
       - name: Configure AWS credentials (OIDC)
