@@ -87,7 +87,7 @@ jobs:
         uses: aquasecurity/trivy-action@v0.35.0
         with:
           scan-type: image
-          image-ref: ${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY }}:main
+          image-ref: ${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY }}:dev
           format: sarif
           output: trivy-ecr-nightly.sarif
           severity: CRITICAL,HIGH,MEDIUM

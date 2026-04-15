@@ -1,8 +1,7 @@
 name: App Pipeline — Scan → Build → Push → Deploy
 
 # Full DevSecOps pipeline: code scans run in parallel, all must pass before build.
-# On main: deploys to staging, smoke-tests, then waits for manual approval → prod.
-# On dev: deploys to staging only.
+# Deploys to dev environment only.
 
 on:
   push:
@@ -298,9 +297,9 @@ jobs:
         run: |
           docker push ${{ steps.set-image.outputs.image-uri }}
 
-# ── Job 7: Deploy to Staging ───────────────────────────────────────────────────
+# ── Job 7: Deploy to Dev ───────────────────────────────────────────────────────
   deploy-dev:
-    name: Deploy → Staging
+    name: Deploy → Dev
     runs-on: ubuntu-latest
     needs: build-and-push
     environment: "dev"
@@ -329,12 +328,12 @@ jobs:
       - name: Helm lint
         run: helm lint ${{ env.HELM_CHART }}
 
-      - name: Deploy to staging
+      - name: Deploy to dev
         run: |
           helm upgrade --install flask-store ${{ env.HELM_CHART }} \
-            --namespace staging \
+            --namespace dev \
             --create-namespace \
-            --values ${{ env.HELM_CHART }}/values-staging.yaml \
+            --values ${{ env.HELM_CHART }}/values-dev.yaml \
             --set image.repository=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }} \
             --set image.tag=${{ github.sha }} \
             --atomic \
@@ -342,11 +341,11 @@ jobs:
             --wait
 
       - name: Verify rollout
-        run: kubectl rollout status deployment/flask-store -n staging --timeout=120s
+        run: kubectl rollout status deployment/flask-store -n dev --timeout=120s
 
 # ── Job 8: Smoke Test ─────────────────────────────────────────────────────────
   smoke-test:
-    name: Smoke Test (Staging)
+    name: Smoke Test (Dev)
     runs-on: ubuntu-latest
     needs: deploy-dev
 
@@ -364,7 +363,7 @@ jobs:
         run: |
           echo "Waiting for ALB hostname..."
           for i in $(seq 1 24); do
-            HOSTNAME=$(kubectl get ingress flask-store -n staging \
+            HOSTNAME=$(kubectl get ingress flask-store -n dev \
               -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
             if [ -n "$HOSTNAME" ]; then
               echo "ALB_URL=http://$HOSTNAME" >> "$GITHUB_ENV"
@@ -387,47 +386,3 @@ jobs:
       - name: Products endpoint check
         run: |
           curl -f --retry 3 "$ALB_URL/products"
-
-# ── Job 9: Deploy to Production ───────────────────────────────────────────────
-  deploy-prod:
-    name: Deploy → Production
-    runs-on: ubuntu-latest
-    needs: smoke-test
-    if: github.ref == 'refs/heads/main'
-    environment: production    # Manual approval gate — configure in GitHub Settings → Environments
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Update kubeconfig
-        run: aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Install Helm
-        uses: azure/setup-helm@v4
-        with:
-          version: "3.15.0"
-
-      - name: Deploy to production
-        run: |
-          helm upgrade --install flask-store ${{ env.HELM_CHART }} \
-            --namespace prod \
-            --create-namespace \
-            --values ${{ env.HELM_CHART }}/values-prod.yaml \
-            --set image.repository=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }} \
-            --set image.tag=${{ github.sha }} \
-            --atomic \
-            --timeout 5m \
-            --wait
-
-      - name: Verify production rollout
-        run: kubectl rollout status deployment/flask-store -n prod --timeout=180s

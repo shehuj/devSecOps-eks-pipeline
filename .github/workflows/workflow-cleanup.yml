@@ -33,7 +33,7 @@ jobs:
   confirm:
     name: Confirm Destruction
     runs-on: ubuntu-latest
-    environment: production    # Requires manual reviewer approval
+    environment: dev
 
     steps:
       - name: Verify confirmation input
@@ -65,34 +65,23 @@ jobs:
         with:
           version: "3.15.0"
 
-      - name: Uninstall prod release
+      - name: Uninstall dev release
         run: |
-          if helm status flask-store -n prod &>/dev/null; then
-            helm uninstall flask-store -n prod --wait --timeout 3m
-            echo "Uninstalled flask-store from prod"
+          if helm status flask-store -n dev &>/dev/null; then
+            helm uninstall flask-store -n dev --wait --timeout 3m
+            echo "Uninstalled flask-store from dev"
           else
-            echo "No prod release found — skipping"
+            echo "No dev release found — skipping"
           fi
 
-      - name: Uninstall staging release
+      - name: Delete namespace
         run: |
-          if helm status flask-store -n staging &>/dev/null; then
-            helm uninstall flask-store -n staging --wait --timeout 3m
-            echo "Uninstalled flask-store from staging"
+          if kubectl get namespace dev &>/dev/null; then
+            kubectl delete namespace dev --wait --timeout=2m
+            echo "Deleted namespace: dev"
           else
-            echo "No staging release found — skipping"
+            echo "Namespace dev not found — skipping"
           fi
-
-      - name: Delete namespaces
-        run: |
-          for ns in prod staging; do
-            if kubectl get namespace "$ns" &>/dev/null; then
-              kubectl delete namespace "$ns" --wait --timeout=2m
-              echo "Deleted namespace: $ns"
-            else
-              echo "Namespace $ns not found — skipping"
-            fi
-          done
 
   # ── Step 2: Drain ECR images ──────────────────────────────────────────────────
   drain-ecr:

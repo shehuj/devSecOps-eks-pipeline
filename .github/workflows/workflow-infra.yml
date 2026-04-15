@@ -151,8 +151,8 @@ jobs:
     name: Terraform Apply
     runs-on: ubuntu-latest
     needs: tf-plan
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || inputs.action == 'apply')
-    environment: production     # Requires manual approval in GitHub Settings → Environments
+    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') && (github.event_name == 'push' || inputs.action == 'apply')
+    environment: dev
     defaults:
       run:
         working-directory: ${{ env.TF_DIR }}
