@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       confirm:
-        description: 'Type the cluster name to confirm: devsecops-eks-dev'
+        description: 'Type the cluster name to confirm: talatwo-dev'
         required: true
         type: string
       destroy_backend:
@@ -23,7 +23,7 @@ permissions:
 
 env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
-  EKS_CLUSTER_NAME: devsecops-eks-dev
+  EKS_CLUSTER_NAME: talatwo-dev
   TF_DIR: terraform/
   TF_IN_AUTOMATION: true
 
@@ -98,7 +98,7 @@ jobs:
 
       - name: Delete all ECR images
         run: |
-          REPO="devsecops-eks-flask-store"
+          REPO="talatwo-flask-store"
 
           IMAGE_IDS=$(aws ecr list-images \
             --repository-name "$REPO" \
@@ -168,7 +168,7 @@ jobs:
 
       - name: Empty and delete S3 state bucket
         run: |
-          BUCKET="devsecops-eks-pipeline-tfstate"
+          BUCKET="talatwo-pipeline-tfstate"
 
           echo "Emptying $BUCKET (all versions)..."
           # Delete all object versions
@@ -196,7 +196,7 @@ jobs:
 
       - name: Delete DynamoDB lock table
         run: |
-          TABLE="devsecops-eks-pipeline-tflock"
+          TABLE="talatwo-pipeline-tflock"
           aws dynamodb delete-table --table-name "$TABLE" --region ${{ env.AWS_REGION }}
           aws dynamodb wait table-not-exists --table-name "$TABLE" --region ${{ env.AWS_REGION }}
           echo "Deleted DynamoDB table: $TABLE"

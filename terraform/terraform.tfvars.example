@@ -2,7 +2,7 @@
 # NEVER commit terraform.tfvars to git (it is in .gitignore)
 
 aws_region          = "us-east-1"
-project_name        = "devsecops-eks"
+project_name        = "talatwo"
 environment         = "dev"
 github_org          = "shehuj"
 github_repo         = "devsecops-eks-pipeline"

@@ -7,7 +7,7 @@ variable "aws_region" {
 variable "project_name" {
   description = "Project name used for resource naming and tagging"
   type        = string
-  default     = "devsecops-eks"
+  default     = "talatwo"
 }
 
 variable "environment" {

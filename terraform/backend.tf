@@ -3,10 +3,10 @@
 
 terraform {
   backend "s3" {
-    bucket         = "devsecops-eks-pipeline-tfstate"
-    key            = "devsecops-eks-pipeline/terraform.tfstate"
+    bucket         = "talatwo-pipeline-tfstate"
+    key            = "talatwo/terraform.tfstate"
     region         = "us-east-1"
     encrypt        = true
-    dynamodb_table = "devsecops-eks-pipeline-tflock"
+    dynamodb_table = "talatwo-pipeline-tflock"
   }
 }
