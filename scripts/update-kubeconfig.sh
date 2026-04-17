@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-CLUSTER_NAME="devsecops-eks-dev"
+CLUSTER_NAME="talatwo-dev"
 REGION="${AWS_REGION:-us-east-1}"
 
 # Allow region override via flag

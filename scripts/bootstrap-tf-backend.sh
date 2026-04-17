@@ -11,8 +11,8 @@
 
 set -euo pipefail
 
-BUCKET="devsecops-eks-pipeline-tfstate"
-TABLE="devsecops-eks-pipeline-tflock"
+BUCKET="talatwo-pipeline-tfstate"
+TABLE="talatwo-pipeline-tflock"
 REGION="us-east-1"
 
 echo "==> Bootstrapping Terraform backend"
