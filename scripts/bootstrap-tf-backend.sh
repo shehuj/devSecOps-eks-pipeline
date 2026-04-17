@@ -11,8 +11,8 @@
 
 set -euo pipefail
 
-BUCKET="bathbucket31"
-TABLE="dyning_table"
+BUCKET="devsecops-eks-pipeline-tfstate"
+TABLE="devsecops-eks-pipeline-tflock"
 REGION="us-east-1"
 
 echo "==> Bootstrapping Terraform backend"
